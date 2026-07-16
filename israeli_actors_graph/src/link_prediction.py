@@ -433,6 +433,7 @@ def predict_future_collaborations(
     centralities: dict,
     svd_emb: dict | None = None,
     n2v_emb: dict | None = None,
+    years_ahead: int | None = None,
     n_top: int = 50,
     min_degree: int = 2,
     max_candidates: int = 15_000,
@@ -492,6 +493,7 @@ def predict_future_collaborations(
     X, _ = lf.build_feature_matrix(
         G, candidates, centralities,
         svd_emb=svd_emb, n2v_emb=n2v_emb,
+        years_ahead=years_ahead,
     )
 
     X_in  = scaler.transform(X) if scaler is not None else X

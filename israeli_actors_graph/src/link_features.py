@@ -294,6 +294,7 @@ def build_feature_matrix(
     svd_emb: dict | None = None,
     n2v_emb: dict | None = None,
     precomputed_sp: dict | None = None,
+    years_ahead: int | None = None,
 ) -> tuple[np.ndarray, list[str]]:
     """Assemble the full feature matrix for a list of (u, v) pairs.
 
@@ -304,15 +305,22 @@ def build_feature_matrix(
                          × {u_val, v_val, product, abs_diff}
     * SVD (2)          : cosine similarity + dot product  [if svd_emb given]
     * Node2Vec (2)     : cosine similarity + dot product  [if n2v_emb given]
+    * years_ahead (1)  : prediction horizon in years      [if years_ahead given]
+                         Enables multi-horizon training and inference —
+                         the same model can score 1-year vs 5-year predictions
+                         simply by changing this value at inference time.
 
     Parameters
     ----------
-    G              : nx.Graph — training snapshot used for feature computation
+    G              : nx.Graph — snapshot used for feature computation
     pairs          : list of (u, v) node-id tuples
     centralities   : {metric_name: {node_id: score}}
     svd_emb        : optional SVD node embeddings
     n2v_emb        : optional Node2Vec node embeddings
     precomputed_sp : optional {(u,v): dist} for fast shortest-path lookup
+    years_ahead    : optional int — how many years ahead we are predicting.
+                     Added as a constant column so the model learns how
+                     prediction difficulty scales with the horizon.
 
     Returns
     -------
@@ -341,6 +349,12 @@ def build_feature_matrix(
             cosine_similarity_feature(pairs, n2v_emb, prefix="n2v_")
             .reset_index(drop=True)
         )
+
+    if years_ahead is not None:
+        ya_df = pd.DataFrame(
+            {"years_ahead": [float(years_ahead)] * len(pairs)}
+        ).reset_index(drop=True)
+        parts.append(ya_df)
 
     X_df = pd.concat(parts, axis=1).fillna(0.0)
     return X_df.values.astype(float), list(X_df.columns)
