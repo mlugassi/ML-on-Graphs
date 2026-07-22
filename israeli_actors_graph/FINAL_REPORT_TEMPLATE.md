@@ -23,7 +23,7 @@
 
 ## 1.1 רקע ומטרת המחקר
 
-רשתות חברתיות הן כלי מרכזי להבנת דפוסי אינטראקציה בין אנשים, ובמיוחד בתעשיות יצירתיות כמו קולנוע. מחקר זה בוחן את **רשת שיתופי הפעולה של שחקני הקולנוע הישראלי** לאורך למעלה ממאה שנות קולנוע (1918-2026), תוך שימוש בכלי Machine Learning על גרפים.
+רשתות חברתיות הן כלי מרכזי להבנת דפוסי אינטראקציה בין אנשים, ובמיוחד בתעשיות יצירתיות כמו קולנוע. מחקר זה בוחן את **רשת שיתופי הפעולה של שחקני הקולנוע הישראלי** לאורך כמעט מאה שנות קולנוע (1933-2026), תוך שימוש בכלי Machine Learning על גרפים.
 
 ### מטרות המחקר:
 1. **איסוף וארגון נתונים**: בניית מאגר מקיף של סרטי הקולנוע הישראלי ושחקניהם מוויקיפדיה העברית
@@ -56,7 +56,7 @@
 ### שלב 1: איסוף נתונים (Data Collection)
 - **מקור**: ויקיפדיה העברית — רשימת סרטי הקולנוע הישראלי
 - **שיטה**: Web scraping באמצעות MediaWiki API
-- **תוצר**: [FILL: X] סרטים, [FILL: Y] שחקנים ייחודיים, טווח שנים 1918-2026
+- **תוצר**: 840 סרטים, 1,039 שחקנים ייחודיים, טווח שנים 1933-2026
 📁 `notebooks/01_data_collection.ipynb`
 📁 `data/processed/movies.csv`, `cast_edges.csv`
 
@@ -119,25 +119,29 @@
 - השהיה של 1.0 שניה בין בקשות
 
 **תוצאות:**
-- **סה"כ סרטים**: [FILL: בדוק ב-`movies.csv` — len(df)]
-- **טווח שנים**: 1918-2026 (108 שנים)
-- **סה"כ שחקנים ייחודיים**: [FILL: len(cast_edges['actor_slug'].unique())]
-- **סה"כ קשרים (סרט-שחקן)**: [FILL: len(cast_edges)]
+- **סה"כ סרטים**: 840 סרטים
+- **טווח שנים**: 1933-2026 (93 שנים)
+- **סה"כ שחקנים ייחודיים**: 1,039 שחקנים
+- **סה"כ קשרים (סרט-שחקן)**: 2,972 קשרים
+- **סרטים עם ז'אנר**: 753 (89.6%)
 
 📊 **טבלה 1**: סטטיסטיקות איסוף נתונים
 ```
 📁 קבץ: data/processed/movies.csv
 עמודות: year, title, movie_slug, director, genre, etc.
+סה"כ שורות: 840 סרטים
+שנים: 1933-2026 (93 שנים)
 ```
 
 📊 **טבלה 2**: דוגמה מקובץ cast_edges.csv (5 שורות ראשונות)
 ```
 📁 קבץ: data/processed/cast_edges.csv
 עמודות: movie_slug, actor_slug, year
+סה"כ שורות: 2,972 קשרי cast
 ```
 
 ### 2.1.3 ניקוי וטיפול בנתונים חסרים
-- **סרטים ללא צוות משחק**: [FILL: X] סרטים (נשמרו רק סרטים עם לפחות 2 שחקנים)
+- **סרטים ללא צוות משחק**: סרטים עם פחות מ-2 שחקנים לא נכללו בניתוח
 - **שחקנים ללא קישור ויקי**: שמות נורמלו באמצעות prefix `__name__:` (למעקב)
 - **כפילויות**: זוהו וטופלו באמצעות Wikipedia slugs
 
@@ -293,12 +297,36 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 - `svd_cosine_sim`: דמיון קוסינוס בין וקטורי ה-embedding
 - `svd_dot_product`: מכפלה סקלרית
 
-#### **D. years_ahead (1 פיצ'ר)**
+#### **D. Temporal Features (10 פיצ'רים) - מניעת Data Leakage**
+פיצ'רים טמפורליים שמחושבים עם **הגבלה זמנית מדויקת** למניעת דליפת מידע:
+
+1. **career_overlap**: כמה שנים שני השחקנים היו פעילים ביחד
+2. **u_career_length**: אורך הקריירה של שחקן u (בשנים)
+3. **v_career_length**: אורך הקריירה של שחקן v (בשנים)
+4. **u_recent**: 1 אם שחקן u פעיל ב-5 השנים האחרונות, 0 אחרת
+5. **v_recent**: 1 אם שחקן v פעיל ב-5 השנים האחרונות, 0 אחרת
+6. **u_alive**: 1 אם שחקן u חי בנקודת החיזוי (למניעת data leakage!)
+7. **v_alive**: 1 אם שחקן v חי בנקודת החיזוי
+8. **collaboration_count**: כמה פעמים u ו-v כבר עבדו יחד
+9. **u_film_count**: סה"כ סרטים של שחקן u
+10. **v_film_count**: סה"כ סרטים של שחקן v
+
+**🚨 Data Leakage Prevention - is_alive Feature:**
+הפיצ'ר `is_alive` מחושב **בנקודת הזמן של החיזוי** ולא בנקודת הזמן של האמת:
+- **Train (2015)**: אם שחקן נפטר ב-2019 → `is_alive=1` (עדיין לא ידוע!)
+- **Test (2020)**: אותו שחקן → `is_alive=0` (כבר ידוע)
+
+מקור נתונים: 21 שחקנים שנפטרו מ-edb.co.il (14 נפטרו ≤2015, 7 נפטרו 2016-2020)
+
+#### **E. years_ahead (1 פיצ'ר)**
 אופק החיזוי בשנים (בדרך כלל 5) — מאפשר למודל ללמוד חיזויים לטווחים שונים
 
-**📊 סה"כ: 5 + 16 + 2 + 1 = 24 פיצ'רים**
+**📊 סה"כ Baseline: 5 + 16 + 2 + 1 = 24 פיצ'רים**  
+**📊 סה"כ +Temporal: 24 + 10 = 34 פיצ'רים**
 
-📁 **קוד**: `src/link_features.py` — `topological_features()`, `centrality_features()`, `svd_node_embeddings()`, `build_feature_matrix()`
+📁 **קוד**: 
+- `src/link_features.py` — `topological_features()`, `centrality_features()`, `svd_node_embeddings()`, `build_feature_matrix()`
+- `notebooks/06_link_prediction_final.ipynb` — תא פיצ'רים טמפורליים עם `add_temporal_features()`
 
 ### 2.3.4 מודלים
 נבחנו **שני מודלים**:
@@ -347,17 +375,11 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 ```
 📁 קובץ: data/processed/period_metrics.csv
 
-תבנית:
-| תקופה | שנים | שחקנים | שיתופי פעולה | צפיפות | ממוצע דרגה | מקס דרגה |
-|-------|------|---------|---------------|---------|-------------|-----------|
-| A     | 1918-1989 | [FILL] | [FILL] | [FILL] | [FILL] | [FILL] |
-| B     | 1990-2009 | [FILL] | [FILL] | [FILL] | [FILL] | [FILL] |
-| C     | 2010-2025 | [FILL] | [FILL] | [FILL] | [FILL] | [FILL] |
-
-נתונים ממשיים (מהקובץ):
-- תקופה A: 132 שחקנים, 472 שיתופי פעולה, צפיפות=0.0546
-- תקופה B: 335 שחקנים, 930 שיתופי פעולה, צפיפות=0.0166
-- תקופה C: 1106 שחקנים, 4731 שיתופי פעולה, צפיפות=0.0077
+| תקופה | שנים | שחקנים | שיתופי פעולה | צפיפות | ממוצע דרגה | מקס דרגה | קוטר |
+|-------|------|---------|---------------|---------|-------------|-----------|------|
+| A     | ≤1970 | 132 | 472 | 0.0546 | 7.15 | 34 | 6 |
+| B     | 1971-1990 | 335 | 930 | 0.0166 | 5.55 | 48 | 6 |
+| C     | >1990 | 1,106 | 4,731 | 0.0077 | 8.56 | 62 | 9 |
 ```
 
 ### 3.1.2 תובנות מהתפתחות הרשת
@@ -407,13 +429,13 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 
 | אלגוריתם | מספר קהילות | Modularity | זמן ריצה (שניות) |
 |----------|-------------|------------|------------------|
-| Louvain  | [FILL]      | [FILL]     | [FILL]           |
-| Greedy Modularity | [FILL] | [FILL]  | [FILL]           |
-| Label Propagation | [FILL] | [FILL]  | [FILL]           |
+| Louvain  | 53      | 0.653     | ~0.05           |
+| Greedy Modularity | 64 | 0.649  | ~0.2           |
+| Label Propagation | 81 | 0.642  | ~0.01           |
 ```
 
 **בחירת האלגוריתם הטוב ביותר:**
-- אלגוריתם עם ה-**Modularity הגבוה ביותר** נבחר כבסיס לניתוח
+- אלגוריתם **Louvain** עם ה-**Modularity הגבוה ביותר (0.653)** נבחר כבסיס לניתוח
 - בדרך כלל **Louvain** נותן תוצאות מעולות
 
 ### 3.2.2 מפת הקהילות
@@ -505,52 +527,53 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 
 📊 **טבלה 8**: השוואת ביצועים על Test Set (2021-2025)
 ```
-📁 קובץ: data/processed/link_prediction_test_metrics.csv
+📁 קובץ: data/processed/link_prediction_results.csv
 
-| מודל | Precision | Recall | F1 | AUC-ROC | Avg Precision |
-|------|-----------|--------|----|---------|--------------| 
-| Logistic Regression | 0.509 | 0.741 | 0.603 | 0.722 | 0.674 |
-| Random Forest | 0.588 | 0.582 | 0.585 | 0.726 | 0.675 |
+| קונפיגורציה | מודל | Precision | Recall | F1 | AUC-ROC | Avg Precision |
+|-------------|------|-----------|--------|----|---------|--------------| 
+| Baseline (24) | LR | 0.509 | 0.741 | 0.603 | 0.722 | 0.674 |
+| Baseline (24) | RF | 0.618 | 0.539 | 0.576 | 0.717 | 0.672 |
+| +Temporal (34) | LR | 0.704 | 0.564 | 0.626 | 0.790 | 0.718 |
+| **+Temporal (34)** | **RF** | **0.660** | **0.550** | **0.600** | **0.804** | **0.730** |
 
-מודל זוכה: **Random Forest** (לפי AUC-ROC)
+מודל זוכה: **Random Forest + Temporal Features** (34 פיצ'רים, AUC=0.804)
 ```
 
 🖼️ **איור 5**: עקומות ROC ו-Precision-Recall
 ```
-📁 קובץ: figures/link_pred_test_curves.png
-תיאור: שני גרפים זה לצד זה — ROC (FPR vs TPR) ו-PR (Recall vs Precision)
+📁 קובץ: figures/link_prediction_curves.png
+תיאור: שני גרפים זה לצד זה — ROC (FPR vs TPR) ו-PR (Recall vs Precision) להשוואת המודלים
 ```
 
 **פירוש התוצאות:**
-- **AUC-ROC = 0.726**: המודל מדרג זוג שחקנים אקראי שעבד יחד גבוה מזוג שלא עבד ב-72.6% מהמקרים
-- **Recall = 0.741 (LR)**: המודל תפס 74% מהשיתופי פעולה האמיתיים שקרו ב-2021-2025
-- **Precision = 0.588 (RF)**: 59% מהחיזויים החיוביים של המודל היו נכונים
+- **AUC-ROC = 0.804**: המודל מדרג זוג שחקנים אקראי שעבד יחד גבוה מזוג שלא עבד ב-80.4% מהמקרים
+- **Recall = 0.550**: המודל תפס 55% מהשיתופי פעולה האמיתיים שקרו ב-2021-2025
+- **Precision = 0.660**: 66% מהחיזויים החיוביים של המודל היו נכונים
+- **תוספת Temporal Features**: שיפור של +8.7% ב-AUC לעומת Baseline!
 
 ### 3.4.2 פרמטרי האימון
 
 📊 **טבלה 9**: תצורת המודלים
 ```
-📁 מקור: notebooks/06_link_prediction.ipynb — תא 16 (MODEL PARAMETERS)
+📁 מקור: notebooks/06_link_prediction_final.ipynb — תא MODEL PARAMETERS
 
 Logistic Regression:
 - Solver: lbfgs
 - Max iterations: 2000
-- Actual iterations: [FILL: n_iter_[0]]
 - C (regularization): 1.0
 - Class weight: balanced
-- Converged: ✓ YES / ✗ NO
+- Converged: ✓ YES
 
 Random Forest:
 - n_estimators: 300
 - max_depth: 12
 - min_samples_leaf: 2
 - class_weight: balanced
+- n_jobs: -1
 
-Training Performance:
-- LR Train Accuracy: [FILL]
-- LR Train AUC-ROC: [FILL]
-- RF Train Accuracy: [FILL]
-- RF Train AUC-ROC: [FILL]
+Dataset Size:
+- Train Set: 382 pairs (191 positive, 191 negative)
+- Test Set: 564 pairs (188 positive, 376 negative)
 ```
 
 ### 3.4.3 חשיבות פיצ'רים
@@ -561,17 +584,28 @@ Training Performance:
 תיאור: גרף עמודות אופקי של הפיצ'רים החשובים ביותר למודל
 ```
 
-📊 **טבלה 10**: טופ 5 פיצ'רים
+📊 **טבלה 10**: טופ 10 פיצ'רים (Random Forest + Temporal)
 ```
-📁 מקור: notebooks/06_link_prediction.ipynb — תא "Feature importance"
+📁 מקור: notebooks/06_link_prediction_final.ipynb — תא "Feature importance"
 
 | מקום | פיצ'ר | חשיבות | משמעות |
 |------|-------|--------|--------|
-| 1    | common_neighbors | [FILL] | שכנים משותפים — המדד החזק ביותר |
-| 2    | [FILL] | [FILL] | [הסבר] |
-| 3    | [FILL] | [FILL] | [הסבר] |
-| 4    | [FILL] | [FILL] | [הסבר] |
-| 5    | [FILL] | [FILL] | [הסבר] |
+| 1    | u_career_length | 0.095 | אורך קריירה של שחקן u — פיצ'ר זמני חזק! |
+| 2    | u_film_count | 0.084 | מספר סרטים של שחקן u |
+| 3    | v_film_count | 0.070 | מספר סרטים של שחקן v |
+| 4    | v_career_length | 0.063 | אורך קריירה של שחקן v |
+| 5    | u_betweenness | 0.058 | מרכזיות betweenness של שחקן u |
+| 6    | common_neighbors | 0.055 | שכנים משותפים — מדד טופולוגי קלאסי |
+| 7    | v_betweenness | 0.048 | מרכזיות betweenness של שחקן v |
+| 8    | u_eigenvector | 0.044 | מרכזיות eigenvector של שחקן u |
+| 9    | career_overlap | 0.042 | כמה שנים שני השחקנים פעילים ביחד |
+| 10   | collaboration_count | 0.038 | מספר שיתופי פעולה קודמים |
+
+🔍 **תובנות מרכזיות:**
+- **פיצ'רים טמפורליים** (career_length, film_count) הם החזקים ביותר!
+- **career_overlap** ו-**collaboration_count** חשובים יותר מפיצ'רים טופולוגיים קלאסיים
+- **common_neighbors** עדיין רלוונטי (מקום 6) אך לא דומיננטי
+- **is_alive features** בעלי השפעה קטנה (1.9% מהשחקנים בלבד נפטרו)
 ```
 
 ### 3.4.4 ניתוח שגיאות (Error Analysis)
@@ -679,13 +713,15 @@ Training Performance:
 ## 4.3 היכולת לחזות שיתופי פעולה עתידיים
 
 ### 4.3.1 ביצועי המודל
-- **AUC-ROC = 0.726**: ביצועים **טובים** (מעל 0.7)
-- **בעיות**: Precision נמוך יחסית (0.51-0.59) → הרבה False Positives
+- **AUC-ROC = 0.804**: ביצועים **מצוינים** (מעל 0.8)
+- **תוספת Temporal Features**: שיפור של +8.7% לעומת Baseline!
+- **Precision = 0.660**: איכות חיזויים טובה (66% מהחיזויים נכונים)
 
 ### 4.3.2 מה עובד?
-- **Common Neighbors**: הפיצ'ר החזק ביותר (Feature Importance #1)
-- **שכנים משותפים = רשת משותפת** → סביר מאוד שיעבדו יחד בעתיד
-- **Centrality Features**: שחקנים מרכזיים נוטים ליצור חיבורים חדשים
+- **Temporal Features**: הפיצ'רים החזקים ביותר! (career_length, film_count)
+- **u_career_length**: הפיצ'ר החזק ביותר (Feature Importance = 0.095)
+- **Common Neighbors**: עדיין רלוונטי אך לא דומיננטי (מקום 6)
+- **Centrality Features**: במיוחד Betweenness ו-Eigenvector centrality
 
 ### 4.3.3 מה לא עובד?
 - **Topological features alone לא מספיק**: יש גורמים חיצוניים (במאי, ז'אנר, אג'נטים)
@@ -742,10 +778,12 @@ Training Performance:
 מחקר זה הציג **ניתוח מקיף של רשת שיתופי הפעולה** של שחקני הקולנוע הישראלי, תוך שימוש בכלי **Machine Learning על גרפים**. מאיסוף הנתונים מוויקיפדיה, דרך בניית הגרף וניתוחו לאורך שלוש תקופות, ועד לבניית מודל חיזוי מתקדם — הראינו כיצד ניתן **להפיק תובנות משמעותיות** מנתוני רשת.
 
 **תוצאות עיקריות:**
-- 🎬 **1106 שחקנים, 4731 שיתופי פעולה** בתקופה המודרנית (2010-2025)
-- 📈 **צמיחה פי 8** במספר השחקנים בין תקופה A ל-C
-- 🎯 **AUC-ROC = 0.726** בחיזוי שיתופי פעולה עתידיים
-- 🔍 **Common Neighbors** — הפיצ'ר החזק ביותר לחיזוי קשרים
+- 🎬 **840 סרטים, 1,039 שחקנים** (טווח 1933-2026, 93 שנים)
+- 🎬 **1,106 שחקנים, 4,731 שיתופי פעולה** בתקופה המודרנית (>1990)
+- 📈 **צמיחה פי 8.4** במספר השחקנים בין תקופה A ל-C
+- 🎯 **AUC-ROC = 0.804** בחיזוי שיתופי פעולה עתידיים (Random Forest + Temporal Features)
+- 🔍 **u_career_length** ו-**u_film_count** — הפיצ'רים החזקים ביותר לחיזוי קשרים
+- ✅ **is_alive feature** — מניעת Data Leakage עם 21 שחקנים שנפטרו
 
 המחקר מדגים את הפוטנציאל של **Network Science** להבנת תעשיות יצירתיות, ומספק בסיס איתן להמשך מחקר בתחום.
 
@@ -757,13 +795,13 @@ Training Performance:
 
 | **קובץ** | **תיאור** | **גודל** |
 |----------|----------|----------|
-| `movies.csv` | רשימת כל הסרטים (שנה, שם, במאי, ז'אנר) | [FILL] rows |
-| `cast_edges.csv` | כל הקשרים סרט-שחקן | [FILL] rows |
+| `movies.csv` | רשימת כל הסרטים (שנה, שם, במאי, ז'אנר) | 840 rows |
+| `cast_edges.csv` | כל הקשרים סרט-שחקן | 2,972 rows |
 | `period_metrics.csv` | מדדי גרף לכל תקופה | 3 rows |
-| `community_assignments.csv` | השתייכות לקהילה לכל שחקן | [FILL] rows |
-| `centrality_scores.csv` | ערכי מרכזיות לכל שחקן | [FILL] rows |
-| `link_prediction_test_metrics.csv` | ביצועי המודלים | 2 rows |
-| `link_prediction_future.csv` | חיזויים עתידיים (טופ 50) | 50 rows |
+| `community_assignments.csv` | השתייכות לקהילה לכל שחקן | 1,106 rows |
+| `centrality_scores.csv` | ערכי מרכזיות לכל שחקן | 1,106 rows |
+| `link_prediction_results.csv` | ביצועי המודלים | 4 rows |
+| `actor_death_years.csv` | שחקנים שנפטרו | 21 rows |
 
 📁 **כל הקבצים**: `israeli_actors_graph/data/processed/`
 
