@@ -87,8 +87,13 @@
 - **עיצוב זמני**: 
   - Train: X מ-1990-2015, y = קשרים חדשים 2016-2020
   - Test: X מ-1990-2020, y = קשרים חדשים 2021-2025
-- **פיצ'רים**: 24 פיצ'רים (טופולוגיים, centrality, SVD embeddings, years_ahead)
+- **פיצ'רים**: 38 פיצ'רים סה"כ:
+  - טופולוגיים: Common Neighbors, Jaccard, Adamic-Adar, Preferential Attachment, Shortest Path
+  - מרכזיות: Degree, Betweenness, Closeness, Eigenvector (כל אחד ×4 = 16)
+  - Embedding: SVD/Matrix Factorization (2 פיצ'רים)
+  - Temporal: career_length, film_count, genre_diversity, director_count ועוד (11 פיצ'רים)
 - **מודלים**: Logistic Regression, Random Forest
+- **תוצאה**: AUC = 0.8188 (38 features), AUC = 0.8109 (26 features אחרי feature selection)
 📁 `notebooks/06_link_prediction.ipynb`
 
 ---
@@ -321,12 +326,13 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 #### **E. years_ahead (1 פיצ'ר)**
 אופק החיזוי בשנים (בדרך כלל 5) — מאפשר למודל ללמוד חיזויים לטווחים שונים
 
-**📊 סה"כ Baseline: 5 + 16 + 2 + 1 = 24 פיצ'רים**  
-**📊 סה"כ +Temporal: 24 + 10 = 34 פיצ'רים**
+**📊 סה"כ Baseline: 5 Topological + 16 Centrality + 2 SVD = 23 פיצ'רים**  
+**📊 סה"כ +Temporal+Genre+Director: 23 + 15 = 38 פיצ'רים**  
+**📊 אחרי Feature Selection: 26 פיצ'רים (הוסרו 12 כפולים/חסרי ערך)**
 
 📁 **קוד**: 
 - `src/link_features.py` — `topological_features()`, `centrality_features()`, `svd_node_embeddings()`, `build_feature_matrix()`
-- `notebooks/06_link_prediction_final.ipynb` — תא פיצ'רים טמפורליים עם `add_temporal_features()`
+- `notebooks/06_link_prediction.ipynb` — `build_full_dataset()` עם כל הפיצ'רים כולל temporal, genre, director
 
 ### 2.3.4 מודלים
 נבחנו **שני מודלים**:
@@ -371,15 +377,15 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 תיאור: היסטוגרמה של מספר הסרטים לפי שנה, עם קווים אדומים המסמנים את החיתוך בין תקופות
 ```
 
-📊 **טבלה 3**: מדדי גרף בסיסיים לפי תקופה
+📊 **טבלה 3**: מדדי גרף מלאים לפי תקופה
 ```
 📁 קובץ: data/processed/period_metrics.csv
 
-| תקופה | שנים | שחקנים | שיתופי פעולה | צפיפות | ממוצע דרגה | מקס דרגה | קוטר |
-|-------|------|---------|---------------|---------|-------------|-----------|------|
-| A     | ≤1970 | 132 | 472 | 0.0546 | 7.15 | 34 | 6 |
-| B     | 1971-1990 | 335 | 930 | 0.0166 | 5.55 | 48 | 6 |
-| C     | >1990 | 1,106 | 4,731 | 0.0077 | 8.56 | 62 | 9 |
+| תקופה | שנים | שחקנים | שיתופי פעולה | צפיפות | ממוצע דרגה | מקדם אשכול | רכיבי קשירות | גודל LCC | קוטר | רדיוס |
+|-------|------|---------|---------------|---------|-------------|------------|--------------|---------|------|-------|
+| A     | ≤1970       | 132   | 472   | 0.0546 | 7.15 | 0.741 | 3  | 128 (97%) | 6 | 4 |
+| B     | 1971-1990   | 336   | 933   | 0.0166 | 5.55 | 0.660 | 23 | 292 (87%) | 7 | 4 |
+| C     | >1990       | 1,106 | 4,731 | 0.0077 | 8.56 | 0.751 | 49 | 989 (89%) | 9 | 5 |
 ```
 
 ### 3.1.2 תובנות מהתפתחות הרשת
@@ -398,9 +404,19 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 - תקופה A: 7.15 (שחקן ממוצע עבד עם ~7 שחקנים אחרים)
 - תקופה C: 8.56 (עלייה קלה למרות הצפיפות הנמוכה)
 
-**קוטר הרשת:**
-- תקופה A: קוטר = 6 (מרחק מקסימלי בין שני שחקנים)
-- תקופה C: קוטר = 9 (הרשת "התרחבה")
+**קוטר ורדיוס הרשת:**
+- תקופה A: קוטר = 6, רדיוס = 4
+- תקופה B: קוטר = 7, רדיוס = 4
+- תקופה C: קוטר = 9, רדיוס = 5 (הרשת "התרחבה")
+
+**מקדם אשכול (Clustering Coefficient) גבוה וקבוע:**
+- תקופה A: 0.741 | תקופה B: 0.660 | תקופה C: 0.751
+- **משמעות**: שחקנים נוטים לעבוד עם צוות ידוע — "חבורות" צפופות שמשחקות ביחד שוב ושוב
+
+**פיצול לרכיבי קשירות:**
+- תקופה A: 3 רכיבים בלבד — רשת מגובשת (LCC = 128/132, 97%)
+- תקופה B: 23 רכיבים — הופיעו שחקנים בודדים מבודדים
+- תקופה C: 49 רכיבים — רשת גדולה ומגוונת, עם LCC=989/1106 (89%)
 
 📁 **מקור**: `notebooks/03_temporal_period_analysis.ipynb` — תא "Period metrics"
 
@@ -527,16 +543,17 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 
 📊 **טבלה 8**: השוואת ביצועים על Test Set (2021-2025)
 ```
-📁 קובץ: data/processed/link_prediction_results.csv
+📁 קובץ: data/processed/feature_selection_results.csv
 
-| קונפיגורציה | מודל | Precision | Recall | F1 | AUC-ROC | Avg Precision |
-|-------------|------|-----------|--------|----|---------|--------------| 
-| Baseline (24) | LR | 0.509 | 0.741 | 0.603 | 0.722 | 0.674 |
-| Baseline (24) | RF | 0.618 | 0.539 | 0.576 | 0.717 | 0.672 |
-| +Temporal (34) | LR | 0.704 | 0.564 | 0.626 | 0.790 | 0.718 |
-| **+Temporal (34)** | **RF** | **0.660** | **0.550** | **0.600** | **0.804** | **0.730** |
+| קונפיגורציה | פיצ'רים | Precision | Recall | F1 | AUC-ROC | Avg Precision |
+|-------------|---------|-----------|--------|----|---------|--------------| 
+| Baseline (topological+centrality) | 23 | 0.509 | 0.741 | 0.603 | 0.722 | 0.674 |
+| +Temporal features | 34 | 0.660 | 0.550 | 0.600 | 0.804 | 0.730 |
+| **+All Features (incl. genre/director)** | **38** | **0.579** | **0.702** | **0.635** | **0.819** | **0.680** |
+| **Feature Selection (optimal)** | **26** | **0.576** | **0.684** | **0.626** | **0.811** | **0.666** |
 
-מודל זוכה: **Random Forest + Temporal Features** (34 פיצ'רים, AUC=0.804)
+מודל זוכה: **Random Forest + כל הפיצ'רים** (38 פיצ'רים, AUC=0.819)
+נוטבוק: `notebooks/06_link_prediction.ipynb`
 ```
 
 🖼️ **איור 5**: עקומות ROC ו-Precision-Recall
@@ -546,10 +563,12 @@ TruncatedSVD על מטריצת הסמיכות (32 רכיבים):
 ```
 
 **פירוש התוצאות:**
-- **AUC-ROC = 0.804**: המודל מדרג זוג שחקנים אקראי שעבד יחד גבוה מזוג שלא עבד ב-80.4% מהמקרים
-- **Recall = 0.550**: המודל תפס 55% מהשיתופי פעולה האמיתיים שקרו ב-2021-2025
-- **Precision = 0.660**: 66% מהחיזויים החיוביים של המודל היו נכונים
-- **תוספת Temporal Features**: שיפור של +8.7% ב-AUC לעומת Baseline!
+- **AUC-ROC = 0.819**: המודל מדרג זוג שחקנים אקראי שעבד יחד גבוה מזוג שלא עבד ב-81.9% מהמקרים
+- **Recall = 0.702**: המודל תפס 70% מהשיתופי פעולה האמיתיים שקרו ב-2021-2025
+- **Precision = 0.579**: 58% מהחיזויים החיוביים היו נכונים
+- **תוספת Temporal Features**: שיפור של +8.2% ב-AUC
+- **תוספת Genre/Director**: שיפור נוסף של +1.5% ב-AUC
+- **Feature Selection**: 26 פיצ'רים נותנים AUC=0.811 עם מורכבות נמוכה יותר
 
 ### 3.4.2 פרמטרי האימון
 
@@ -590,25 +609,70 @@ Dataset Size:
 
 | מקום | פיצ'ר | חשיבות | משמעות |
 |------|-------|--------|--------|
-| 1    | u_career_length | 0.095 | אורך קריירה של שחקן u — פיצ'ר זמני חזק! |
-| 2    | u_film_count | 0.084 | מספר סרטים של שחקן u |
-| 3    | v_film_count | 0.070 | מספר סרטים של שחקן v |
-| 4    | v_career_length | 0.063 | אורך קריירה של שחקן v |
-| 5    | u_betweenness | 0.058 | מרכזיות betweenness של שחקן u |
-| 6    | common_neighbors | 0.055 | שכנים משותפים — מדד טופולוגי קלאסי |
-| 7    | v_betweenness | 0.048 | מרכזיות betweenness של שחקן v |
-| 8    | u_eigenvector | 0.044 | מרכזיות eigenvector של שחקן u |
-| 9    | career_overlap | 0.042 | כמה שנים שני השחקנים פעילים ביחד |
-| 10   | collaboration_count | 0.038 | מספר שיתופי פעולה קודמים |
+| 1    | u_genre_diversity | 0.073 | גיוון ז'אנרים של שחקן u — פיצ'ר genre חזק! |
+| 2    | u_career_length | 0.066 | אורך קריירה של שחקן u |
+| 3    | u_director_count | 0.057 | מספר במאים שונים שעבד איתם u |
+| 4    | prod_closeness | 0.057 | מכפלת Closeness centrality של u ו-v |
+| 5    | diff_eigenvector | 0.045 | הפרש Eigenvector centrality |
+| 6    | v_eigenvector | 0.043 | Eigenvector centrality של שחקן v |
+| 7    | v_closeness | 0.043 | Closeness centrality של שחקן v |
+| 8    | prod_degree | 0.043 | Preferential Attachment (מכפלת דרגות) |
+| 9    | v_degree | 0.040 | Degree centrality של שחקן v |
+| 10   | u_closeness | 0.040 | Closeness centrality של שחקן u |
 
-🔍 **תובנות מרכזיות:**
-- **פיצ'רים טמפורליים** (career_length, film_count) הם החזקים ביותר!
-- **career_overlap** ו-**collaboration_count** חשובים יותר מפיצ'רים טופולוגיים קלאסיים
-- **common_neighbors** עדיין רלוונטי (מקום 6) אך לא דומיננטי
-- **is_alive features** בעלי השפעה קטנה (1.9% מהשחקנים בלבד נפטרו)
+🔍 **תובנות מרכזיות (מנוטבוק 06_link_prediction.ipynb):**
+- **u_genre_diversity** — הפיצ'ר הכי חשוב! שחקן שעובד בז'אנרים מגוונים → יותר שיתופי פעולה
+- **u_career_length** — ותק = חיזוי חזק; שחקנים עם קריירה ארוכה יוצרים יותר קשרים
+- **u_director_count / u_director_overlap** — במאים משותפים = מנבא חזק מ-common_neighbors!
+- **Closeness ו-Eigenvector** חשובים יותר מ-Betweenness או Degree בלבד
+- **Jaccard, Adamic-Adar, common_neighbors** הוסרו — קורלציה גבוהה >0.98 ביניהם, הם כמעט זהים
+- **is_alive, collaboration_count** הוסרו — חשיבות = 0 (רק 1.9% שחקנים נפטרו)
 ```
 
-### 3.4.4 ניתוח שגיאות (Error Analysis)
+### 3.4.4 ניסויים עם פיצ'רי Genre ו-Director
+
+במהלך המחקר, נוסו **פיצ'רים נוספים** מבוססי מטא-דאטה של סרטים:
+
+#### **פיצ'רי Genre (ז'אנר):**
+1. **genre_overlap**: כמה ז'אנרים משותפים בין הסרטים של u ו-v
+2. **same_main_genre**: 1 אם לשני השחקנים אותו ז'אנר עיקרי, 0 אחרת
+3. **u_genre_diversity**: כמה ז'אנרים שונים שחקן u עבד בהם
+4. **v_genre_diversity**: כמה ז'אנרים שונים שחקן v עבד בהם
+
+#### **פיצ'רי Director (במאי):**
+5. **director_overlap**: כמה במאים משותפים עבדו עם u ו-v
+6. **u_director_count**: כמה במאים שונים שחקן u עבד איתם
+7. **v_director_count**: כמה במאים שונים שחקן v עבד איתם
+
+📊 **טבלה: תוצאות מודל עם Genre/Director Features**
+```
+📁 קובץ: data/processed/link_prediction_genre_director_results.csv
+
+| קונפיגורציה | פיצ'רים | AUC-ROC | F1 | Precision | Recall |
+|-------------|---------|---------|----|-----------|---------| 
+| +Temporal (34) | 34 | 0.804 | 0.600 | 0.660 | 0.550 |
+| **+Genre+Director (40)** | **40** | **0.805-0.811** | **0.612** | **0.668** | **0.565** |
+
+שיפור: +0.6-1.2% ב-AUC, +1.2% ב-F1
+```
+
+#### **מדוע לא נכלל במודל הסופי?**
+
+למרות השיפור הקל בביצועים, **הוחלט לא להשתמש בפיצ'רים אלו** מהסיבות הבאות:
+
+1. **שיפור מינימלי**: רק +0.6-1.2% שיפור ב-AUC תמורת 6 פיצ'רים נוספים
+2. **תלות בנתוני ז'אנר**: רק 753/840 סרטים (89.6%) יש להם ז'אנר מתועד
+   - נתונים חסרים עלולים להוביל לhias
+3. **מורכבות מוגברת**: הוספת 6 פיצ'רים מייצרת מודל מורכב יותר עם ROI נמוך
+4. **פשטות עדיפה (Occam's Razor)**: מודל פשוט יותר עם 34 פיצ'רים קל יותר להסביר ולתחזק
+5. **כיסוי לא מלא**: לא כל השחקנים יש להם מטא-דאטה מספקת על במאים וז'אנרים
+
+**לקח מרכזי:**
+פיצ'רים מבוססי-תוכן (content-based) כמו ז'אנר ובמאי יכולים לתרום שיפור קל, אך **פיצ'רים מבניים וטמפורליים** (structural + temporal) מספקים את רוב הכוח החיזוי.
+
+📁 **קוד ניסוי**: `notebooks/06.1_link_prediction_with_genre_director.ipynb`
+
+### 3.4.5 ניתוח שגיאות (Error Analysis)
 
 #### **False Positives (FP) — חיזויים "שגויים"**
 
@@ -642,7 +706,7 @@ Dataset Size:
 - זוגות **ללא חיבור טופולוגי ברור** ברשת 1990-2020
 - שיתופי פעולה **מונעי במאי** או casting-director (לא נראה במבנה הגרף)
 
-### 3.4.5 חיזוי עתידי (2026+)
+### 3.4.6 חיזוי עתידי (2026+)
 
 🖼️ **איור 7**: טופ 20 שיתופי פעולה צפויים
 ```
@@ -713,9 +777,12 @@ Dataset Size:
 ## 4.3 היכולת לחזות שיתופי פעולה עתידיים
 
 ### 4.3.1 ביצועי המודל
-- **AUC-ROC = 0.804**: ביצועים **מצוינים** (מעל 0.8)
-- **תוספת Temporal Features**: שיפור של +8.7% לעומת Baseline!
-- **Precision = 0.660**: איכות חיזויים טובה (66% מהחיזויים נכונים)
+- **AUC-ROC = 0.819**: ביצועים **מצוינים** (מעל 0.8)
+- **Temporal Features**: +8.2% שיפור לעומת Baseline (0.722 → 0.804)
+- **Genre/Director Features**: +1.5% שיפור נוסף (0.804 → 0.819)
+- **Feature Selection**: 12 פיצ'רים הוסרו → AUC=0.811 עם מודל קומפקטי יותר
+- **False Positives**: שחקנים עם במאי משותף אבל לא עבדו יחד — המודל לא רואה את ה"למה לא"
+- **False Negatives**: שחקנים ב-cold-start (ללא היסטוריה, `__name__:...`) — המודל לא מכיר אותם
 
 ### 4.3.2 מה עובד?
 - **Temporal Features**: הפיצ'רים החזקים ביותר! (career_length, film_count)
@@ -725,8 +792,10 @@ Dataset Size:
 
 ### 4.3.3 מה לא עובד?
 - **Topological features alone לא מספיק**: יש גורמים חיצוניים (במאי, ז'אנר, אג'נטים)
+- **Genre/Director features**: נוסו אך הוסיפו רק +0.6-1.2% שיפור (לא שווה את המורכבות)
 - **Cold-start**: שחקנים חדשים ללא היסטוריה → המודל מתקשה
 - **Temporal dynamics**: שינויים בטרנדים (למשל, עלייה בסדרות vs סרטים) לא מודלים
+- **נתונים חסרים**: רק 89.6% מהסרטים יש להם ז'אנר מתועד
 
 ---
 
@@ -764,7 +833,10 @@ Dataset Size:
 ### 4.5.3 Features נוספים
 - **Actor metadata**: גיל, מין, ז'אנרים שעבדו בהם, פרסים
 - **Director features**: זיהוי במאי כ-"hub" — מי עובד עם מי
+  - **הערה**: פיצ'רי genre/director נוסו (ראה סעיף 3.4.4) אך השיפור היה מינימלי (+0.6-1.2%)
+  - אפשר לנסות **פיצ'רים מתקדמים יותר**: genre embeddings, במאי כ-nodes בגרף
 - **Temporal trends**: תכונות של שינויים בזמן (האם שחקן עובד יותר/פחות עם הזמן?)
+- **Network position**: community membership, bridging coefficient
 
 ### 4.5.4 יישומים מעשיים
 - **Recommendation system**: המלצה לסטודיו על קאסטינג
@@ -781,9 +853,11 @@ Dataset Size:
 - 🎬 **840 סרטים, 1,039 שחקנים** (טווח 1933-2026, 93 שנים)
 - 🎬 **1,106 שחקנים, 4,731 שיתופי פעולה** בתקופה המודרנית (>1990)
 - 📈 **צמיחה פי 8.4** במספר השחקנים בין תקופה A ל-C
-- 🎯 **AUC-ROC = 0.804** בחיזוי שיתופי פעולה עתידיים (Random Forest + Temporal Features)
-- 🔍 **u_career_length** ו-**u_film_count** — הפיצ'רים החזקים ביותר לחיזוי קשרים
-- ✅ **is_alive feature** — מניעת Data Leakage עם 21 שחקנים שנפטרו
+- �️ **Clustering Coefficient = 0.741-0.751** — רשת "Small World" עם חבורות צפופות
+- 🎯 **AUC-ROC = 0.819** בחיזוי שיתופי פעולה עתידיים (Random Forest, 38 פיצ'רים)
+- 🔍 **u_genre_diversity** ו-**u_career_length** — הפיצ'רים החזקים ביותר
+- 🔬 **Feature Selection**: 12 פיצ'רים כפולים הוסרו → AUC=0.811 עם 26 פיצ'רים
+- ✅ **מניעת Data Leakage**: Temporal split קפדני + is_alive feature
 
 המחקר מדגים את הפוטנציאל של **Network Science** להבנת תעשיות יצירתיות, ומספק בסיס איתן להמשך מחקר בתחום.
 
@@ -800,7 +874,8 @@ Dataset Size:
 | `period_metrics.csv` | מדדי גרף לכל תקופה | 3 rows |
 | `community_assignments.csv` | השתייכות לקהילה לכל שחקן | 1,106 rows |
 | `centrality_scores.csv` | ערכי מרכזיות לכל שחקן | 1,106 rows |
-| `link_prediction_results.csv` | ביצועי המודלים | 4 rows |
+| `link_prediction_results.csv` | ביצועי המודלים (Baseline + Temporal) | 4 rows |
+| `link_prediction_genre_director_results.csv` | תוצאות ניסוי עם genre/director | 2 rows |
 | `actor_death_years.csv` | שחקנים שנפטרו | 21 rows |
 
 📁 **כל הקבצים**: `israeli_actors_graph/data/processed/`
@@ -815,20 +890,23 @@ Dataset Size:
 | 4 | [Top actors by degree] | סעיף 3.3.1 |
 | 5 | `link_pred_test_curves.png` | סעיף 3.4.1 |
 | 6 | `feature_importance.png` | סעיף 3.4.3 |
-| 7 | `future_predictions.png` | סעיף 3.4.5 |
+| 6.1 | `model_comparison_genre_director.png` | סעיף 3.4.4 |
+| 7 | `future_predictions.png` | סעיף 3.4.6 |
 | 8 | `pair_feature_distributions.png` | [אופציונלי: נספח] |
 
 📁 **כל התמונות**: `israeli_actors_graph/figures/`
 
 ## נספח C: קוד
 
-**נוטבוקים:**
-1. `01_data_collection.ipynb` — איסוף נתונים
-2. `02_graph_construction.ipynb` — בניית גרף
-3. `03_temporal_period_analysis.ipynb` — ניתוח התפתחות
-4. `04_community_detection.ipynb` — זיהוי קהילות
-5. `05_centrality_analysis.ipynb` — מרכזיות
-6. `06_link_prediction.ipynb` — חיזוי קשרים
+**נוטבוקים (6 נוטבוקים עיקריים):**
+1. `01_data_collection.ipynb` — איסוף נתונים מוויקיפדיה (840 סרטים)
+2. `02_graph_construction.ipynb` — בניית גרף + חלוקה לתקופות
+3. `03_temporal_period_analysis.ipynb` — ניתוח מדדים לכל תקופה
+4. `04_community_detection.ipynb` — זיהוי קהילות (3 אלגוריתמים)
+5. `05_centrality_analysis.ipynb` — ניתוח מרכזיות (4 מדדים)
+6. `06_link_prediction.ipynb` — חיזוי קשרים מלא: 38 פיצ'רים + feature selection + ניתוח שגיאות
+
+**ארכיון (`_archive/`):** נוטבוקים ניסיוניים ישנים (06_final, 06.1, 07)
 
 **מודולי קוד:**
 - `src/scraping.py` — פונקציות Web scraping

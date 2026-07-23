@@ -1,0 +1,13 @@
+feature,importance,reason
+collaboration_count,0.0,Low Importance
+u_alive,0.0,Low Importance
+v_alive,0.0012725715659259315,Low Importance
+common_neighbors,0.002528987523946436,Low ImportanceHigh Correlation
+jaccard,0.004014043958578851,Low Importance
+adamic_adar,0.004973756024460502,Low Importance
+v_genre_diversity,0.006522605075618191,Low Importance
+same_main_genre,0.008542533490339383,Low Importance
+genre_overlap,0.009029906127374893,Low Importance
+v_film_count,0.011219749285725613,High Correlation
+pref_attachment,0.041969299200868226,High Correlation
+u_film_count,0.057017983132937114,High Correlation
