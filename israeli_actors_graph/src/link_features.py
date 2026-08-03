@@ -8,6 +8,7 @@ Public API
 topological_features(G, pairs)                    -> pd.DataFrame
 centrality_features(pairs, centralities)          -> pd.DataFrame
 svd_node_embeddings(G, n_components, seed)        -> dict[node, np.ndarray]
+walk_based_node_embeddings(G, ...)                -> dict[node, np.ndarray]
 node2vec_node_embeddings(G, ...)                  -> dict[node, np.ndarray]
 cosine_similarity_feature(pairs, emb, prefix)     -> pd.DataFrame
 hadamard_features(pairs, emb, prefix)             -> pd.DataFrame
@@ -160,9 +161,84 @@ def svd_node_embeddings(
 
 
 # ---------------------------------------------------------------------------
-# Node2Vec embeddings
+# Walk-based node embeddings (dependency-free node2vec/DeepWalk alternative)
 # ---------------------------------------------------------------------------
 
+def walk_based_node_embeddings(
+    G: nx.Graph,
+    n_components: int = 32,
+    walk_length: int = 20,
+    num_walks: int = 10,
+    window: int = 5,
+    seed: int = 42,
+) -> dict:
+    """Random-walk structural embeddings, WITHOUT requiring the ``node2vec``/
+    ``gensim`` packages (which need a compiled C toolchain unavailable on some
+    machines/Python versions).
+
+    This is the NetMF approach (Qiu et al., 2018, "Network Embedding as
+    Matrix Factorization"): generate uniform random walks over the graph
+    (equivalent to node2vec with p=q=1, i.e. DeepWalk), build a node-node
+    co-occurrence matrix from a sliding window over the walks, then factorize
+    that co-occurrence matrix with TruncatedSVD. NetMF is proven to recover
+    embeddings equivalent to DeepWalk/node2vec's skip-gram objective in the
+    limit of infinite walks, making this a legitimate distinct "embedding
+    method" from the plain-adjacency ``svd_node_embeddings`` (Matrix
+    Factorization) baseline above — it captures multi-hop random-walk
+    structural similarity rather than direct one-hop co-occurrence.
+
+    Returns
+    -------
+    dict : node_id -> np.ndarray of shape (n_components,)
+    """
+    nodes = list(G.nodes())
+    n = len(nodes)
+    if n == 0:
+        return {}
+    node_index = {node: i for i, node in enumerate(nodes)}
+    rng = np.random.default_rng(seed)
+    adj = {node: list(G.neighbors(node)) for node in nodes}
+
+    # 1. Generate uniform random walks (DeepWalk-style, p=q=1)
+    walks = []
+    for _ in range(num_walks):
+        order = rng.permutation(n)
+        for start_idx in order:
+            walk = [nodes[start_idx]]
+            cur = walk[0]
+            for _ in range(walk_length - 1):
+                neighbors = adj[cur]
+                if not neighbors:
+                    break
+                cur = neighbors[rng.integers(len(neighbors))]
+                walk.append(cur)
+            walks.append(walk)
+
+    # 2. Build a node-node co-occurrence matrix from a sliding window
+    co = lil_matrix((n, n), dtype=np.float64)
+    for walk in walks:
+        L = len(walk)
+        for i in range(L):
+            idx_i = node_index[walk[i]]
+            for j in range(max(0, i - window), min(L, i + window + 1)):
+                if i == j:
+                    continue
+                idx_j = node_index[walk[j]]
+                co[idx_i, idx_j] += 1.0
+
+    # 3. Factorize the co-occurrence matrix with TruncatedSVD
+    k = min(n_components, max(1, n - 1))
+    svd = TruncatedSVD(n_components=k, random_state=seed)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        emb = svd.fit_transform(co.tocsr())
+
+    return {nodes[i]: emb[i] for i in range(n)}
+
+
+# ---------------------------------------------------------------------------
+# Node2Vec embeddings
+# ---------------------------------------------------------------------------
 def node2vec_node_embeddings(
     G: nx.Graph,
     dimensions: int = 64,
