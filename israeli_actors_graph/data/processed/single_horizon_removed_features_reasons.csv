@@ -1,19 +1,19 @@
 feature,importance,reason
 collaboration_count,0.0,Low Importance
-v_alive,0.00020495828260742735,Low Importance
-common_neighbors,0.0004892642928634233,Low ImportanceHigh Correlation
-u_alive,0.0005113376407662589,Low Importance
-adamic_adar,0.0011731157891155608,Low Importance
-jaccard,0.0015701139702467776,Low Importance
-u_genre_diversity,0.0026674127989237692,Low Importance
-v_genre_diversity,0.0029619424961919716,Low Importance
-genre_overlap,0.004282593038824598,Low Importance
-career_overlap,0.00534409492513608,Low Importance
-v_recent,0.005482860181204487,Low Importance
-same_main_genre,0.006062236041017235,Low Importance
-director_overlap,0.0073521531275467615,Low Importance
-shortest_path,0.00951955679546991,Low Importance
-v_film_count,0.012363213279562475,High Correlation
-u_director_count,0.014367881077017476,High Correlation
-u_betweenness,0.03817050909243409,High Correlation
-pref_attachment,0.039866619750099745,High Correlation
+v_alive,4.733945033716613e-05,Low Importance
+u_alive,0.0002694719226190785,Low Importance
+adamic_adar,0.0006912617464856319,Low ImportanceHigh Correlation
+common_neighbors,0.0007921629357063292,Low ImportanceHigh Correlation
+jaccard,0.0017383673434987605,Low Importance
+v_genre_diversity,0.002349006553335678,Low Importance
+u_genre_diversity,0.0031088925561492285,Low Importance
+genre_overlap,0.005240504517030008,Low Importance
+v_recent,0.005468387559162681,Low Importance
+career_overlap,0.005630151944917596,Low Importance
+same_main_genre,0.005753093169866191,Low Importance
+director_overlap,0.006439435167771931,Low Importance
+shortest_path,0.00862389891768116,Low Importance
+u_director_count,0.013486944069392217,High Correlation
+v_film_count,0.014414939721141355,High Correlation
+u_betweenness,0.04151258536343112,High Correlation
+prod_degree,0.04246205676846565,High Correlation

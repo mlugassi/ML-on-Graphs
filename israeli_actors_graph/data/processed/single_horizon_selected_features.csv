@@ -1,7 +1,7 @@
 feature
+pref_attachment
 u_degree
 v_degree
-prod_degree
 diff_degree
 v_betweenness
 prod_betweenness
